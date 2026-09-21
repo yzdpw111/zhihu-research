@@ -11,7 +11,7 @@ description: 知乎调研 — 搜索问答/专栏，抓取回答/评论/回复�
 
 ## 快速开始（首次使用）
 
-前置：**Windows** · **Google Chrome** · **Python 3.9+** · 能访问 `zhihu.com`
+前置：**Windows** / **Google Chrome** / **Python 3.9+** / 能访问 `zhihu.com`
 
 ```powershell
 # 1) 装依赖（requirements.txt 在 scripts/ 下）
@@ -20,7 +20,7 @@ pip install -r scripts/requirements.txt
 # 2) 启动专用 Chrome 并登录知乎（登录态持久保存，只需做一次）
 python scripts/chrome_session.py --start
 #    → 在弹出的 Chrome 里扫码 / 手机号登录
-python scripts/chrome_session.py --status     # 应看到: ✅ CDP 在线: ... (port 9222)
+python scripts/chrome_session.py --status     # 应看到: CDP 在线: ... (port 9222)
 
 # 3) 跑第一条搜索
 python scripts/zhihu_search.py --q "嵌入式" --rows 5 --parallel 1
@@ -55,12 +55,12 @@ python scripts/chrome_session.py --stop
 
 | 参数 | 必填 | 默认 | 说明 |
 |------|:--:|------|------|
-| `--q` | ✅ | — | 搜索关键词（可重复） |
-| `--rows` | ❌ | 25 | 最大结果数（1-100） |
-| `--type` | ❌ | 不限 | 不限 / 回答 / 文章 |
-| `--sort` | ❌ | 综合 | 综合 / 最多赞同 / 最新发布 |
-| `--time` | ❌ | 不限 | 不限 / 一天内 / 一周内 / 一月内 / 三月内 / 半年内 / 一年内 |
-| `--parallel` | ❌ | 2 | 并行关键词数（1-8） |
+| `--q` | 必填 | — | 搜索关键词（可重复） |
+| `--rows` | 可选 | 25 | 最大结果数（1-100） |
+| `--type` | 可选 | 不限 | 不限 / 回答 / 文章 |
+| `--sort` | 可选 | 综合 | 综合 / 最多赞同 / 最新发布 |
+| `--time` | 可选 | 不限 | 不限 / 一天内 / 一周内 / 一月内 / 三月内 / 半年内 / 一年内 |
+| `--parallel` | 可选 | 2 | 并行关键词数（1-8） |
 
 **输出：** `{ filters, count, results, logPath }`，每条 result 含 `keyword`, `total`, `items[{ title, link, type, description, votes, comments }]`；`type` 为 `question`（问题）或 `column`（专栏）。
 
@@ -73,10 +73,10 @@ python scripts/chrome_session.py --stop
 
 | 参数 | 必填 | 默认 | 说明 |
 |------|:--:|------|------|
-| `--url` | ⚠️ | — | 问题 / 专栏 URL（可重复）；与 stdin 管道二选一，至少给一个 |
-| `--max-answers` | ❌ | 15 | 每问题最大回答数（1-80） |
-| `--max-comments` | ❌ | 15 | 每条回答最大评论数 |
-| `--parallel` | ❌ | 2 | 并行 URL 数（1-8） |
+| `--url` | 二选一 | — | 问题 / 专栏 URL（可重复）；与 stdin 管道二选一，至少给一个 |
+| `--max-answers` | 可选 | 15 | 每问题最大回答数（1-80） |
+| `--max-comments` | 可选 | 15 | 每条回答最大评论数 |
+| `--parallel` | 可选 | 2 | 并行 URL 数（1-8） |
 
 **输出：** `{ count, succeeded, failed, questions, columns, logPath }`
 

@@ -18,7 +18,7 @@ chrome_session.py — 持久化 CDP Chrome 会话管理（登录专用）
 """
 import subprocess, sys, os, json, time, urllib.request, argparse
 
-# stdout/stderr 强制 UTF-8：控制台默认 GBK 时，下面的 ✅/❌ 提示会抛 UnicodeEncodeError
+# stdout/stderr 强制 UTF-8：控制台默认 GBK 时，输出内容里的 emoji 会抛 UnicodeEncodeError
 for _stream in (sys.stdout, sys.stderr):
     try:
         _stream.reconfigure(encoding="utf-8", errors="replace")
@@ -157,17 +157,17 @@ def cmd_start(url):
     targets = [url] if url else URLS
     open_pages(port, targets)
 
-    print(f"✅ Chrome CDP 已启动: {v.get('Browser')}")
+    print(f"Chrome CDP 已启动: {v.get('Browser')}")
     print(f"   端口: {port}  profile: {PROFILE}")
     print(f"   请在 Chrome 窗口里登录小红书/知乎，登录完成后运行: python chrome_session.py --stop")
 
 def cmd_status():
     port = read_port()
     if not port or not check_port(port):
-        print("❌ CDP 未在线（profile 无运行实例）")
+        print("CDP 未在线（profile 无运行实例）")
         return
     v = check_port(port)
-    print(f"✅ CDP 在线: {v.get('Browser')} (port {port})")
+    print(f"CDP 在线: {v.get('Browser')} (port {port})")
     # 列出页面
     try:
         r = urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=5)
@@ -186,7 +186,7 @@ def cmd_stop():
             subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
             print(f"已关闭 Chrome PID {pid}")
     subprocess.run(["schtasks", "/delete", "/tn", TASK_NAME, "/f"], capture_output=True)
-    print("✅ 已清理计划任务。登录态保存在 profile 中，下次 --start 无需重新登录")
+    print("已清理计划任务。登录态保存在 profile 中，下次 --start 无需重新登录")
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="持久化 CDP Chrome 会话管理")
