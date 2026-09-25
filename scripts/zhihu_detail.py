@@ -5,7 +5,7 @@ zhihu_detail.py — 知乎问题/专栏详情 CLI
 用法:
   python zhihu_detail.py --url "https://www.zhihu.com/question/613083643" --max-answers 15
   python zhihu_search.py --q 嵌入式 --rows 5 | python zhihu_detail.py --max-answers 10
-输出: stdout JSON { count, succeeded, failed, questions?, columns? }
+输出: stdout JSON { count, succeeded, failed, questions?, columns?, failures? }
 
 注意:
   - 提取 JS 均为参数化箭头函数，调用时用 IIFE 传参 `client.evaluate(f"({JS})(args)")`
@@ -489,11 +489,11 @@ def main():
         sys.exit(1)
     port = ensure_cdp()
     limit = min(len(urls), args.parallel)
-    questions, columns, failed = [], [], 0
+    questions, columns, failures = [], [], []
     with ThreadPoolExecutor(max_workers=limit) as ex:
         for u, r in ex.map(_scrape_in_tab, [port] * len(urls), urls, [args] * len(urls)):
             if isinstance(r, Exception):
-                failed += 1
+                failures.append({"url": u[:120], "error": str(r)[:200]})
                 sys.stderr.write(f"失败: {u[:80]} — {str(r)[:100]}\n")
             else:
                 if r.get("type") == "column":
@@ -501,12 +501,14 @@ def main():
                 else:
                     questions.append(r)
                 sys.stderr.write(f"完成: {u[:80]}\n")
-    out = {"count": len(questions) + len(columns) + failed,
-           "succeeded": len(questions) + len(columns), "failed": failed}
+    out = {"count": len(questions) + len(columns) + len(failures),
+           "succeeded": len(questions) + len(columns), "failed": len(failures)}
     if questions:
         out["questions"] = questions
     if columns:
         out["columns"] = columns
+    if failures:
+        out["failures"] = failures
     # 先落盘再写 stdout：宿主对 stdout 有大小上限，Agent 拿全文直接读 logPath
     try:
         out["logPath"] = write_log(out, "zhihu_detail")

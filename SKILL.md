@@ -78,10 +78,11 @@ python scripts/chrome_session.py --stop
 | `--max-comments` | 可选 | 15 | 每条回答最大评论数 |
 | `--parallel` | 可选 | 2 | 并行 URL 数（1-8） |
 
-**输出：** `{ count, succeeded, failed, questions, columns, logPath }`
+**输出：** `{ count, succeeded, failed, questions?, columns?, failures?, logPath }`
 
 - question：`url, type, title, total, answers[{ author, content, votes, commentCount, answerLink }], comments[{ author, content, date, location }]`
 - column：`url, type, title, author, content`
+- `failures`：仅当有 URL 抓取失败时出现，形如 `[{ url, error }]`。批量抓取（尤其 `--parallel > 1`、请求过密）可能出现**部分 URL 失败**；`failed` 只给数量，**要定位是哪些 URL、为什么挂，必须看 `failures`**
 
 **用法：**
 
