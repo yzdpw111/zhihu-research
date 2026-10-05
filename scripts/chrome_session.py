@@ -3,19 +3,20 @@
 chrome_session.py — 持久化 CDP Chrome 会话管理（登录专用）
 
 用途:
-  用专用 profile 打开小红书，登录完成后关闭。Chrome 由 schtasks 计划任务启动，
-  脱离 Reasonix 进程组，不会被连带清理，可长期保持运行。
+  用专用 profile 打开小红书和知乎，完成登录后关闭。Chrome 以 detached 进程启动
+  （Popen + DETACHED_PROCESS），脱离 Reasonix 进程组，不会被连带清理，可长期保持运行。
 
 用法:
-  python chrome_session.py --start [--url https://www.xiaohongshu.com]   # 打开 Chrome（持久）
-  python chrome_session.py --status                                      # 查看 CDP 端口/登录状态
+  python chrome_session.py --start [--url https://www.zhihu.com]   # 打开 Chrome（持久）
+  python chrome_session.py --status                                      # 查看状态
   python chrome_session.py --stop                                        # 关闭专用 Chrome（按 profile 精准匹配）
 
 示例:
-  python chrome_session.py --start           # 打开 Chrome，去登录小红书
-  python chrome_session.py --status          # 确认已登录
+  python chrome_session.py --start           # 打开 Chrome，去登录知乎
+  python chrome_session.py --status          # 确认 CDP 在线（不显示登录态）
   python chrome_session.py --stop            # 登录完关闭
 """
+
 import subprocess, sys, os, json, time, urllib.request, argparse
 
 # stdout/stderr 强制 UTF-8：控制台默认 GBK 时，输出内容里的 emoji 会抛 UnicodeEncodeError
