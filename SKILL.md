@@ -217,14 +217,15 @@ scripts/
   zhihu_detail.py     详情 + 回答 + 评论/回复（问题与专栏）
   zhihu_parser.py     结果后处理纯函数
   cdp_base.py         CDP 客户端 + Chrome 启动 + 人类行为模拟 + tab 生命周期 + 落盘
-  chrome_session.py   登录会话管理（--start/--status/--stop）
+  chrome_session.py   登录会话管理（--start/--status/--stop/--url）
   config.py           集中配置（可用 ZHIHU_* 覆盖）
   requirements.txt    依赖清单
 
-tests/                离线单测（不需要 Chrome / 网络）
+  tests/
+  test_*.py           离线单测（不需要 Chrome / 网络）
 ```
 
-跑测试（不需要登录）：
+跑测试（离线单测，不需要登录/网络）：
 
 ```powershell
 pip install pytest
