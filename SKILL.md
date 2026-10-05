@@ -1,6 +1,6 @@
 ---
 name: zhihu-research
-description: 知乎调研 — 搜索问答/专栏，抓取回答/评论/回复，CDP Chrome 自动化（反爬）
+description: 从知乎抓取问答与专栏数据。当用户需要搜索知乎问答或专栏（可按类型/排序/时间筛选），或抓取指定问题的回答、每条回答下的评论与回复，或抓取专栏正文时使用。基于 CDP 裸 Chrome 自动化，需 Google Chrome + 已登录的知乎账号。
 ---
 
 # 知乎 Research
