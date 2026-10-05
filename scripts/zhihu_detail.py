@@ -127,22 +127,27 @@ EXPAND_REPLY_JS = """() => {
   return clicked;
 }"""
 
-# 点击第 idx 个评论区里第 k 个可见的「查看全部 x 条回复」按钮（>5 条弹窗），
+# 点击第 idx 个评论区里「查看全部 x 条回复」按钮（>5 条弹窗），
 # 返回其所属父评论的 data-id（无按钮时返回 null）。点击后弹窗由 MODAL_REPLIES_JS 抓取。
-# 已点过的按钮用 dataset.expanded 标记去重，支持一个评论区多个弹窗逐个抓取
-CLICK_MODAL_JS = """(idx, k) => {
+#
+# 注意：这里**故意取 btns[0]**，而不是传入下标取 btns[k]。
+# 因为 filter 会动态排除已点过的按钮（!b.dataset.expanded），数组每轮都在缩短；
+# 若同时再用递增下标 k 去取，下标与元素就会错位 —— 同一个按钮会被重复点击
+# （表现为弹窗一闪而过、反复打开），另一些按钮则被跳过。
+# 固定取 [0] 让"去重"单独负责推进：每个按钮恰好被点一次。
+CLICK_MODAL_JS = """(idx) => {
   const containers = document.querySelectorAll('.Comments-container');
   const container = containers.length > idx ? containers[idx] : document.querySelector('.Modal-content');
   if (!container) return null;
   const btns = Array.from(container.querySelectorAll('button'))
     .filter(b => /查看全部.*回复/.test(b.textContent) && b.offsetParent !== null && !b.dataset.expanded);
-  const btn = btns[k];
+  const btn = btns[0];
   if (!btn) return null;
   btn.dataset.expanded = '1';
   const parent = btn.closest('[data-id]');
   const parentId = parent ? parent.getAttribute('data-id') : '';
   btn.click();
-  return parentId;
+  return parentId || null;
 }"""
 
 # 提取「查看全部 x 条回复」弹窗（.Modal-content）里的回复（作者/内容/日期）
@@ -408,16 +413,24 @@ def scrape_column(client, url):
 
 
 def scrape_modal_replies(client, idx, max_comments):
-    """遍历第 idx 个评论区里的所有「查看全部」弹窗，逐个抓取，返回 {parent_id: replies}"""
+    """遍历第 idx 个评论区里的所有「查看全部」弹窗，逐个抓取，返回 {parent_id: replies}
+
+    每轮由 CLICK_MODAL_JS 取「第一个未点过的」按钮（不传下标，见该 JS 上方注释），
+    所以这里不需要自己维护索引 —— 靠按钮上的 dataset.expanded 去重推进。
+    """
     modal_map = {}
-    for k in range(max_comments):
-        parent_id = client.evaluate(f"({CLICK_MODAL_JS})({idx}, {k})")
+    for _ in range(max_comments):
+        parent_id = client.evaluate(f"({CLICK_MODAL_JS})({idx})")
         if not parent_id:
-            break  # 没有更多弹窗按钮
+            break  # 没有更多未点过的弹窗按钮
+        # 等弹窗渲染；若始终没出现，说明这次点击没生效（按钮已被标记去重，
+        # 继续循环也只会空转），直接退出并放弃该弹窗。
         for _ in range(20):
             if client.evaluate("!!document.querySelector('.Modal-content')"):
                 break
             time.sleep(0.5)
+        else:
+            break
         replies = client.evaluate(f"({MODAL_REPLIES_JS})()") or []
         modal_map[parent_id] = replies
         client.send("Input.dispatchKeyEvent", {"type": "keyDown", "key": "Escape", "code": "Escape"})
