@@ -39,34 +39,73 @@ def setup_stdout():
             pass
 
 
-def write_log(data, script_name):
-    """完整结果落盘到 <logs.dir>/<脚本>-<时间戳>.json，返回绝对路径。
+def _find_record_list(data):
+    """从结果对象里找出「记录列表」——兼容 results / items / refs / files / notes。"""
+    if isinstance(data, list):
+        return [x for x in data if isinstance(x, dict)]
+    if not isinstance(data, dict):
+        return []
+    for key in ("results", "items", "refs", "files", "chapters", "notes",
+                "questions", "columns"):
+        v = data.get(key)
+        if isinstance(v, list) and v and isinstance(v[0], dict):
+            return v
+    return []
+
+
+def write_log(data, script_name, params=None):
+    """完整结果落盘到 <logs.dir>/<脚本名>-<时间戳>.json，返回绝对路径。
 
     宿主对脚本 stdout 有大小上限，结果一多就会被截断；Agent 需要全文时
-    直接读这个文件。必须在 stdout 输出之前调用：这样 stdout 崩了也不丢结果。
+    直接读这个文件。**必须在 stdout 输出之前调用**：这样 stdout 崩了也不丢结果。
+
+    2026-10 增强 1：落盘时**追加 meta 字段**（纯增量，count/results 不动）：
+        meta = skill / script / time / argv
+    argv 默认取本次命令行参数 —— 原始 JSON 因此能自证"是哪个命令、什么时候产生的"。
+
+    2026-10 增强 2：**额外**落一份 <名>.jsonl 等价镜像（主 .json 契约完全不变）。
+      它不是因为"文件会被截断"（文件由脚本完整写出，不会截断），而是因为
+      **一行一条记录**：agent 可直接按行检索、分页，不必每次写解析器。
+      首行是 __meta__ / __count__。
+
+    不写 .tsv：它是纯派生视图，列集合随记录字段漂移，应由下游分析层生成。
     """
     import datetime
+
     logs_dir = get("logs.dir")
     os.makedirs(logs_dir, exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    path = os.path.join(logs_dir, f"{script_name}-{ts}.json")
+    path = os.path.join(logs_dir, script_name + "-" + ts + ".json")
+
+    payload = dict(data) if isinstance(data, dict) else {"results": data}
+    payload["meta"] = {
+        "skill": "zhihu-research",
+        "script": script_name,
+        "time": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+        "argv": list(params) if params is not None else list(sys.argv[1:]),
+    }
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    try:
+        recs = _find_record_list(data)
+        flat = []
+        for r in recs:
+            items = r.get("items")
+            if isinstance(items, list) and items and isinstance(items[0], dict):
+                for it in items:
+                    flat.append(dict(it, keyword=r.get("keyword")))
+            else:
+                flat.append(r)
+        with open(path[:-5] + ".jsonl", "w", encoding="utf-8") as f:
+            head = {"__meta__": payload["meta"],
+                    "__count__": payload.get("count", len(flat))}
+            f.write(json.dumps(head, ensure_ascii=False) + chr(10))
+            for r in flat:
+                f.write(json.dumps(r, ensure_ascii=False) + chr(10))
+    except Exception:
+        pass
     return os.path.abspath(path)
-
-
-# ── 常量（从 config 读，沿用 xhs skill 的 profile 约定）──────────
-BASE = get("state.dir")
-PROFILE = os.path.join(BASE, "chrome-cdp")
-PORT_FILE = os.path.join(BASE, ".cdp_port")
-TASK_NAME = "ChromeCDP-Shared"
-
-CHROME_PATHS = [
-    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-    os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
-]
-
 
 class CdpError(Exception):
     pass
