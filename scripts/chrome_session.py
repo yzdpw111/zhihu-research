@@ -112,6 +112,57 @@ def open_pages(port, urls):
     except Exception as e:
         print(f"  (warn: CDP 打开页面失败: {e})")
 
+# ── 启动诊断：Chrome 的 stderr 必须落盘，否则"启动失败"会伪装成"启动超时" ──
+
+_SANDBOX_MARKERS = ("crashpad", "OpenProcess", "platform_channel", "self-terminating", "拒绝访问")
+
+
+def chrome_log_path():
+    """Chrome stderr 落盘路径：state 目录 logs/ → 运行目录 logs/ → 临时目录"""
+    import tempfile
+    for d in (os.path.join(BASE, "logs"), os.path.join(os.getcwd(), "logs"), tempfile.gettempdir()):
+        try:
+            os.makedirs(d, exist_ok=True)
+            path = os.path.join(d, "chrome-launch.log")
+            with open(path, "ab"):
+                pass          # 探写一次：没权限时立刻退回下一个候选目录
+            return path
+        except Exception:
+            continue
+    return None
+
+
+def read_log_tail(path, limit=1500):
+    """读启动日志末尾；失败返回空串 —— 日志只用于诊断，不能盖住真实错误"""
+    if not path:
+        return ""
+    try:
+        with open(path, "rb") as f:
+            return f.read()[-limit:].decode("utf-8", errors="replace").strip()
+    except Exception:
+        return ""
+
+
+def launch_failed(port, log_path, code):
+    """Chrome 启动失败的报错文本：附 Chrome 自己的 stderr + 可执行的处置建议"""
+    tail = read_log_tail(log_path)
+    when = "启动即退出" if code is not None else "30 秒内未就绪"
+    msg = [f"FATAL: Chrome {when} (port {port})",
+           f"Chrome 日志: {log_path or '(日志目录不可写，未能落盘)'}"]
+    if tail:
+        msg += ["--- Chrome stderr 末尾 ---", tail, "-------------------------"]
+    if any(m in tail for m in _SANDBOX_MARKERS):
+        msg += [
+            "诊断: crashpad 的进程句柄与 mojo 的命名管道被当前受限沙箱拒绝，Chrome 启动即自杀，"
+            "调试端口永不监听。与 skill 代码/依赖/启动参数无关（--no-sandbox 等无法绕过）。",
+            "处置: 本命令必须在放行沙箱(danger-full-access)或 DSH 之外执行；启动成功后，"
+            "回到沙箱内跑抓取脚本即可复用该在线实例。",
+        ]
+    elif not tail:
+        msg += ["诊断: 拿不到 Chrome 的 stderr（日志目录都不可写）。常见原因仍是受限沙箱拒绝 "
+                "crashpad/mojo；处置同上：在放行沙箱或 DSH 之外启动一次 Chrome。"]
+    return "\n".join(msg)
+
 # ── 子命令 ────────────────────────────────────────────
 
 def cmd_start(url):
@@ -137,22 +188,40 @@ def cmd_start(url):
     # 原先走 schtasks 计划任务，实测本机不再触发（任务 Last Run Time 不更新、端口不监听），
     # 改用 Popen(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP)。
     os.makedirs(PROFILE, exist_ok=True)
-    subprocess.Popen(
+    log_path = chrome_log_path()
+    log_handle = None
+    if log_path:
+        try:
+            log_handle = open(log_path, "ab")
+            log_handle.write(
+                f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} chrome_session --start port={port} ===\n".encode("utf-8"))
+            log_handle.flush()
+        except Exception:
+            log_handle = None
+    sink = log_handle if log_handle is not None else subprocess.DEVNULL
+    proc = subprocess.Popen(
         [exe, f"--remote-debugging-port={port}", f"--user-data-dir={PROFILE}",
          "--remote-allow-origins=*", "--no-first-run", "--no-default-browser-check"],
         creationflags=0x00000008 | 0x00000200,
-        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL, stdout=sink, stderr=sink,
         close_fds=True)
+    if log_handle is not None:
+        try:
+            log_handle.close()      # 子进程持有自己的句柄副本，父进程这份可以关
+        except Exception:
+            pass
 
-    # 等待端口就绪
+    # 等待端口就绪；Chrome 已经退出就不必再等满超时（受限沙箱里它启动即自杀）
     for _ in range(30):
         time.sleep(1)
         v = check_port(port)
         if v:
             write_port(port)
             break
+        if proc.poll() is not None:
+            print(launch_failed(port, log_path, proc.poll())); sys.exit(1)
     else:
-        print("FATAL: Chrome 30 秒内未就绪"); sys.exit(1)
+        print(launch_failed(port, log_path, proc.poll())); sys.exit(1)
 
     # 用 CDP 打开目标页面（小红书 + 知乎）
     targets = [url] if url else URLS
